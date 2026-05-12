@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="et">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Eelarve kalkulaator</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f0f4f8;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      padding: 24px 16px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+      padding: 36px 32px;
+      width: 100%;
+      max-width: 460px;
+    }
+
+    h1 { font-size: 1.4rem; color: #1a202c; margin-bottom: 6px; }
+    .subtitle { font-size: 0.88rem; color: #718096; margin-bottom: 28px; }
+
+    /* ── Section headings ── */
+    .section-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: #a0aec0;
+      margin: 24px 0 12px;
+    }
+    .section-label:first-of-type { margin-top: 0; }
+
+    /* ── Calendar ── */
+    .calendar-wrap {
+      border: 1.5px solid #e2e8f0;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .cal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: #f7f8ff;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .cal-header button {
+      width: 30px; height: 30px;
+      border-radius: 6px;
+      border: none;
+      background: #e0e7ff;
+      color: #4f46e5;
+      font-size: 1rem;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      padding: 0; margin: 0;
+      flex-shrink: 0;
+    }
+    .cal-header button:hover { background: #c7d2fe; }
+
+    .cal-month-label {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #1a202c;
+    }
+
+    .cal-grid {
+      padding: 10px 12px 14px;
+    }
+
+    .cal-weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      margin-bottom: 4px;
+    }
+
+    .cal-weekday {
+      text-align: center;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: #a0aec0;
+      padding: 4px 0;
+    }
+
+    .cal-days {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+    }
+
+    .cal-day {
+      aspect-ratio: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.82rem;
+      color: #1a202c;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+      position: relative;
+      user-select: none;
+    }
+
+    .cal-day:hover:not(.empty):not(.disabled) { background: #e0e7ff; color: #4f46e5; }
+    .cal-day.empty { cursor: default; }
+    .cal-day.disabled { color: #cbd5e0; cursor: not-allowed; }
+
+    .cal-day.today::after {
+      content: '';
+      position: absolute;
+      bottom: 3px;
+      left: 50%; transform: translateX(-50%);
+      width: 4px; height: 4px;
+      border-radius: 50%;
+      background: #4f46e5;
+    }
+
+    .cal-day.in-range {
+      background: #e0e7ff;
+      border-radius: 0;
+      color: #3730a3;
+    }
+
+    .cal-day.range-start,
+    .cal-day.range-end {
+      background: #4f46e5 !important;
+      color: #fff !important;
+      border-radius: 6px;
+      z-index: 1;
+    }
+
+    .cal-day.range-start.range-end { border-radius: 6px; }
+
+    /* flatten range edges */
+    .cal-day.range-start:not(.range-end) { border-radius: 6px 0 0 6px; }
+    .cal-day.range-end:not(.range-start) { border-radius: 0 6px 6px 0; }
+
+    /* ── Selected dates display ── */
+    .date-display {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 8px;
+      align-items: center;
+      margin-top: 12px;
+    }
+
+    .date-box {
+      background: #f7f8ff;
+      border: 1.5px solid #e0e7ff;
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+
+    .date-box-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: #6366f1;
+      margin-bottom: 2px;
+    }
+
+    .date-box-val {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #1a202c;
+      min-height: 20px;
+    }
+
+    .date-arrow { text-align: center; color: #a0aec0; font-size: 1.1rem; }
+
+    .days-badge {
+      text-align: center;
+      margin-top: 10px;
+      font-size: 0.85rem;
+      color: #4a5568;
+      min-height: 20px;
+    }
+
+    .days-badge strong { color: #4f46e5; }
+
+    /* ── Money fields ── */
+    .field { margin-bottom: 16px; }
+
+    label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #4a5568;
+      margin-bottom: 6px;
+    }
+
+    .input-wrap { position: relative; }
+
+    .input-wrap span {
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #a0aec0;
+      font-size: 0.9rem;
+      pointer-events: none;
+    }
+
+    input[type="number"] {
+      width: 100%;
+      padding: 12px 40px 12px 14px;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 1rem;
+      color: #1a202c;
+      outline: none;
+      transition: border-color 0.2s;
+      -moz-appearance: textfield;
+    }
+
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
+
+    input[type="number"]:focus { border-color: #4f46e5; }
+
+    .error-msg {
+      font-size: 0.78rem;
+      color: #e53e3e;
+      margin-top: 4px;
+      min-height: 16px;
+    }
+
+    /* ── Button ── */
+    .calc-btn {
+      width: 100%;
+      padding: 14px;
+      background: #4f46e5;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: background 0.2s;
+    }
+
+    .calc-btn:hover { background: #4338ca; }
+    .calc-btn:active { background: #3730a3; }
+
+    /* ── Result ── */
+    .result {
+      margin-top: 24px;
+      background: #f7f8ff;
+      border: 1.5px solid #c7d2fe;
+      border-radius: 12px;
+      padding: 22px;
+      display: none;
+    }
+
+    .result.visible { display: block; }
+
+    .result-label {
+      font-size: 0.78rem;
+      color: #6366f1;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+
+    .result-value {
+      font-size: 2.2rem;
+      font-weight: 700;
+      color: #1a202c;
+    }
+
+    .result-value span {
+      font-size: 1rem;
+      font-weight: 500;
+      color: #718096;
+      margin-left: 4px;
+    }
+
+    .result-breakdown {
+      margin-top: 14px;
+      border-top: 1px solid #e0e7ff;
+      padding-top: 12px;
+      display: grid;
+      gap: 5px;
+    }
+
+    .breakdown-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      color: #4a5568;
+    }
+
+    .breakdown-row .val { font-weight: 600; color: #1a202c; }
+
+    .result.warning { background: #fff5f5; border-color: #feb2b2; }
+    .result.warning .result-label { color: #e53e3e; }
+    .result.warning .result-value { color: #e53e3e; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <h1>Eelarve kalkulaator</h1>
+  <p class="subtitle">Vali periood, sisesta eelarve ja kulutused — saad teada oma päevalimiidi.</p>
+
+  <!-- CALENDAR -->
+  <div class="section-label">Periood</div>
+  <div class="calendar-wrap">
+    <div class="cal-header">
+      <button onclick="changeMonth(-1)">&#8249;</button>
+      <span class="cal-month-label" id="cal-month-label"></span>
+      <button onclick="changeMonth(1)">&#8250;</button>
+    </div>
+    <div class="cal-grid">
+      <div class="cal-weekdays">
+        <div class="cal-weekday">E</div>
+        <div class="cal-weekday">T</div>
+        <div class="cal-weekday">K</div>
+        <div class="cal-weekday">N</div>
+        <div class="cal-weekday">R</div>
+        <div class="cal-weekday">L</div>
+        <div class="cal-weekday">P</div>
+      </div>
+      <div class="cal-days" id="cal-days"></div>
+    </div>
+  </div>
+
+  <!-- Date display -->
+  <div class="date-display">
+    <div class="date-box">
+      <div class="date-box-label">Algus</div>
+      <div class="date-box-val" id="disp-start">—</div>
+    </div>
+    <div class="date-arrow">→</div>
+    <div class="date-box">
+      <div class="date-box-label">Lõpp</div>
+      <div class="date-box-val" id="disp-end">—</div>
+    </div>
+  </div>
+  <div class="days-badge" id="days-badge"></div>
+
+  <!-- MONEY -->
+  <div class="section-label">Eelarve</div>
+
+  <div class="field">
+    <label for="budget">Kogu eelarve</label>
+    <div class="input-wrap">
+      <input type="number" id="budget" placeholder="nt 1000" min="0" step="0.01" />
+      <span>€</span>
+    </div>
+    <div class="error-msg" id="err-budget"></div>
+  </div>
+
+  <div class="field">
+    <label for="spent">Juba kulutatud</label>
+    <div class="input-wrap">
+      <input type="number" id="spent" placeholder="nt 300" min="0" step="0.01" />
+      <span>€</span>
+    </div>
+    <div class="error-msg" id="err-spent"></div>
+  </div>
+
+  <button class="calc-btn" onclick="calculate()">Arvuta päevaeelarve</button>
+
+  <div class="result" id="result">
+    <div class="result-label" id="result-label">Päeva eelarve</div>
+    <div class="result-value" id="result-value">–<span>€/päev</span></div>
+    <div class="result-breakdown">
+      <div class="breakdown-row">
+        <span>Järelejäänud eelarve</span>
+        <span class="val" id="bd-remaining">–</span>
+      </div>
+      <div class="breakdown-row">
+        <span>Päevi järel (tänasest)</span>
+        <span class="val" id="bd-days">–</span>
+      </div>
+      <div class="breakdown-row">
+        <span>Kogu perioodi pikkus</span>
+        <span class="val" id="bd-total-days">–</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ── Calendar state ──
+  const today = new Date();
+  today.setHours(0,0,0,0);
+
+  let viewYear  = today.getFullYear();
+  let viewMonth = today.getMonth(); // 0-based
+  let rangeStart = null;
+  let rangeEnd   = null;
+  let selecting  = 'start'; // 'start' | 'end'
+
+  const MONTHS_ET = ['Jaanuar','Veebruar','Märts','Aprill','Mai','Juuni',
+                     'Juuli','August','September','Oktoober','November','Detsember'];
+
+  function isSameDay(a, b) {
+    return a && b && a.getFullYear()===b.getFullYear() &&
+           a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
+  }
+
+  function dateKey(d) {
+    return d ? `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` : null;
+  }
+
+  function renderCalendar() {
+    document.getElementById('cal-month-label').textContent =
+      `${MONTHS_ET[viewMonth]} ${viewYear}`;
+
+    const container = document.getElementById('cal-days');
+    container.innerHTML = '';
+
+    const firstDay = new Date(viewYear, viewMonth, 1);
+    // Monday-based week: Monday=0 … Sunday=6
+    let startBlank = (firstDay.getDay() + 6) % 7;
+    const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+
+    for (let i = 0; i < startBlank; i++) {
+      const el = document.createElement('div');
+      el.className = 'cal-day empty';
+      container.appendChild(el);
+    }
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = new Date(viewYear, viewMonth, d);
+      const el = document.createElement('div');
+      el.className = 'cal-day';
+      el.textContent = d;
+
+      if (isSameDay(date, today)) el.classList.add('today');
+
+      const isStart = isSameDay(date, rangeStart);
+      const isEnd   = isSameDay(date, rangeEnd);
+
+      if (isStart) el.classList.add('range-start');
+      if (isEnd)   el.classList.add('range-end');
+
+      if (rangeStart && rangeEnd) {
+        if (date > rangeStart && date < rangeEnd) el.classList.add('in-range');
+      }
+
+      el.addEventListener('click', () => onDayClick(date));
+      container.appendChild(el);
+    }
+  }
+
+  function onDayClick(date) {
+    if (selecting === 'start') {
+      rangeStart = date;
+      rangeEnd   = null;
+      selecting  = 'end';
+    } else {
+      if (date < rangeStart) {
+        rangeEnd   = rangeStart;
+        rangeStart = date;
+      } else {
+        rangeEnd = date;
+      }
+      selecting = 'start';
+    }
+    updateDateDisplay();
+    renderCalendar();
+  }
+
+  function updateDateDisplay() {
+    const fmt = d => d ? `${d.getDate()} ${MONTHS_ET[d.getMonth()].slice(0,3)} ${d.getFullYear()}` : '—';
+    document.getElementById('disp-start').textContent = fmt(rangeStart);
+    document.getElementById('disp-end').textContent   = fmt(rangeEnd);
+
+    const badge = document.getElementById('days-badge');
+    if (rangeStart && rangeEnd) {
+      const totalDays = Math.round((rangeEnd - rangeStart) / 86400000) + 1;
+      const daysLeft  = Math.max(0, Math.round((rangeEnd - today) / 86400000) + 1);
+      badge.innerHTML = `Kokku <strong>${totalDays} päeva</strong> · tänasest jäänud <strong>${daysLeft} päeva</strong>`;
+    } else if (rangeStart) {
+      badge.innerHTML = `Vali perioodi <strong>lõppkuupäev</strong>`;
+    } else {
+      badge.textContent = '';
+    }
+  }
+
+  function changeMonth(dir) {
+    viewMonth += dir;
+    if (viewMonth < 0)  { viewMonth = 11; viewYear--; }
+    if (viewMonth > 11) { viewMonth = 0;  viewYear++; }
+    renderCalendar();
+  }
+
+  // ── Calculator ──
+  function calculate() {
+    const budget = parseFloat(document.getElementById('budget').value);
+    const spent  = parseFloat(document.getElementById('spent').value);
+
+    document.getElementById('err-budget').textContent = '';
+    document.getElementById('err-spent').textContent  = '';
+
+    let valid = true;
+
+    if (isNaN(budget) || budget < 0) {
+      document.getElementById('err-budget').textContent = 'Sisesta kehtiv eelarve.';
+      valid = false;
+    }
+    if (isNaN(spent) || spent < 0) {
+      document.getElementById('err-spent').textContent = 'Sisesta kehtiv kulutatud summa.';
+      valid = false;
+    }
+    if (!isNaN(budget) && !isNaN(spent) && spent > budget) {
+      document.getElementById('err-spent').textContent = 'Kulutatud summa ületab eelarve.';
+      valid = false;
+    }
+    if (!rangeEnd) {
+      alert('Palun vali kalendrist perioodi algus- ja lõppkuupäev.');
+      valid = false;
+    }
+
+    if (!valid) {
+      document.getElementById('result').classList.remove('visible');
+      return;
+    }
+
+    const daysLeft  = Math.max(0, Math.round((rangeEnd - today) / 86400000) + 1);
+    const totalDays = Math.round((rangeEnd - rangeStart) / 86400000) + 1;
+
+    if (daysLeft === 0) {
+      alert('Periood on lõppenud — päevi ei ole järel.');
+      return;
+    }
+
+    const remaining = budget - spent;
+    const daily     = remaining / daysLeft;
+
+    const resultEl = document.getElementById('result');
+    resultEl.classList.add('visible');
+
+    if (daily < 0) {
+      resultEl.classList.add('warning');
+      document.getElementById('result-label').textContent = 'Eelarve on ületatud!';
+    } else {
+      resultEl.classList.remove('warning');
+      document.getElementById('result-label').textContent = 'Päeva eelarve';
+    }
+
+    document.getElementById('result-value').innerHTML = fmt(daily) + '<span>€/päev</span>';
+    document.getElementById('bd-remaining').textContent  = fmt(remaining) + ' €';
+    document.getElementById('bd-days').textContent       = daysLeft + ' päeva';
+    document.getElementById('bd-total-days').textContent = totalDays + ' päeva';
+  }
+
+  function fmt(n) {
+    return n.toLocaleString('et-EE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  document.querySelectorAll('input[type="number"]').forEach(el => {
+    el.addEventListener('keydown', e => { if (e.key === 'Enter') calculate(); });
+  });
+
+  // ── Init ──
+  renderCalendar();
+</script>
+</body>
+</html>
