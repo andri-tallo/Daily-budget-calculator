@@ -230,6 +230,44 @@
 
     input[type="number"]:focus { border-color: #4f46e5; }
 
+    /* ── Toggle ── */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      margin-bottom: 16px;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 8px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .toggle-row .toggle-text { font-size: 0.85rem; font-weight: 600; color: #4a5568; }
+    .toggle-row .toggle-hint { display: block; font-size: 0.75rem; font-weight: 400; color: #a0aec0; margin-top: 2px; }
+    .toggle-row input { position: absolute; opacity: 0; pointer-events: none; }
+    .switch {
+      position: relative;
+      width: 40px; height: 22px;
+      flex-shrink: 0;
+      border-radius: 11px;
+      background: #cbd5e0;
+      transition: background 0.2s;
+    }
+    .switch::after {
+      content: '';
+      position: absolute;
+      top: 3px; left: 3px;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: #fff;
+      transition: transform 0.2s;
+    }
+    .toggle-row input:checked + .switch { background: #4f46e5; }
+    .toggle-row input:checked + .switch::after { transform: translateX(18px); }
+    .toggle-row input:focus-visible + .switch { outline: 2px solid #4f46e5; outline-offset: 2px; }
+    .hidden { display: none; }
+
     .error-msg {
       font-size: 0.78rem;
       color: #e53e3e;
@@ -314,7 +352,7 @@
 <body>
 <div class="card">
   <h1>Eelarve kalkulaator</h1>
-  <p class="subtitle">Vali periood, sisesta eelarve ja kulutused — saad teada oma päevalimiidi.</p>
+  <p class="subtitle">Vali periood ja sisesta eelarve — saad teada oma päevalimiidi.</p>
 
   <!-- CALENDAR -->
   <div class="section-label">Periood</div>
@@ -364,8 +402,17 @@
     <div class="error-msg" id="err-budget"></div>
   </div>
 
-  <div class="field">
-    <label for="spent">Juba kulutatud</label>
+  <label class="toggle-row" for="use-today">
+    <span class="toggle-text">
+      Arvesta tänase seisuga
+      <span class="toggle-hint">Jagab järelejäänud summa tänasest lõpuni jäänud päevadele</span>
+    </span>
+    <input type="checkbox" id="use-today" />
+    <span class="switch"></span>
+  </label>
+
+  <div class="field hidden" id="spent-field">
+    <label for="spent">Tänaseks kulutatud</label>
     <div class="input-wrap">
       <input type="number" id="spent" placeholder="nt 300" min="0" step="0.01" />
       <span>€</span>
@@ -380,11 +427,11 @@
     <div class="result-value" id="result-value">–<span>€/päev</span></div>
     <div class="result-breakdown">
       <div class="breakdown-row">
-        <span>Järelejäänud eelarve</span>
+        <span id="bd-remaining-label">Järelejäänud eelarve</span>
         <span class="val" id="bd-remaining">–</span>
       </div>
       <div class="breakdown-row">
-        <span>Päevi järel (tänasest)</span>
+        <span id="bd-days-label">Päevi järel (tänasest)</span>
         <span class="val" id="bd-days">–</span>
       </div>
       <div class="breakdown-row">
@@ -475,6 +522,7 @@
     }
     updateDateDisplay();
     renderCalendar();
+    autoCalculate();
   }
 
   function updateDateDisplay() {
@@ -485,8 +533,11 @@
     const badge = document.getElementById('days-badge');
     if (rangeStart && rangeEnd) {
       const totalDays = Math.round((rangeEnd - rangeStart) / 86400000) + 1;
-      const daysLeft  = Math.max(0, Math.round((rangeEnd - today) / 86400000) + 1);
-      badge.innerHTML = `Kokku <strong>${totalDays} päeva</strong> · tänasest jäänud <strong>${daysLeft} päeva</strong>`;
+      if (useToday()) {
+        badge.innerHTML = `Kokku <strong>${totalDays} päeva</strong> · tänasest jäänud <strong>${daysLeftFromToday()} päeva</strong>`;
+      } else {
+        badge.innerHTML = `Kokku <strong>${totalDays} päeva</strong>`;
+      }
     } else if (rangeStart) {
       badge.innerHTML = `Vali perioodi <strong>lõppkuupäev</strong>`;
     } else {
@@ -502,49 +553,66 @@
   }
 
   // ── Calculator ──
-  function calculate() {
-    const budget = parseFloat(document.getElementById('budget').value);
-    const spent  = parseFloat(document.getElementById('spent').value);
+  function useToday() {
+    return document.getElementById('use-today').checked;
+  }
 
+  // Days left counting from today (or from period start if it is in the future)
+  function daysLeftFromToday() {
+    const from = today > rangeStart ? today : rangeStart;
+    return Math.max(0, Math.round((rangeEnd - from) / 86400000) + 1);
+  }
+
+  // silent = auto-recalculation: no alerts, no error messages, just hide the result
+  function calculate(silent = false) {
+    const resultEl = document.getElementById('result');
+    const withToday = useToday();
+    const budget = parseFloat(document.getElementById('budget').value);
+    const spentRaw = document.getElementById('spent').value;
+    const spent  = withToday ? (spentRaw === '' ? 0 : parseFloat(spentRaw)) : 0;
+
+    const setErr = (id, msg) => { if (!silent) document.getElementById(id).textContent = msg; };
     document.getElementById('err-budget').textContent = '';
     document.getElementById('err-spent').textContent  = '';
 
     let valid = true;
 
     if (isNaN(budget) || budget < 0) {
-      document.getElementById('err-budget').textContent = 'Sisesta kehtiv eelarve.';
+      setErr('err-budget', 'Sisesta kehtiv eelarve.');
       valid = false;
     }
-    if (isNaN(spent) || spent < 0) {
-      document.getElementById('err-spent').textContent = 'Sisesta kehtiv kulutatud summa.';
-      valid = false;
-    }
-    if (!isNaN(budget) && !isNaN(spent) && spent > budget) {
-      document.getElementById('err-spent').textContent = 'Kulutatud summa ületab eelarve.';
+    if (withToday && (isNaN(spent) || spent < 0)) {
+      setErr('err-spent', 'Sisesta kehtiv kulutatud summa.');
       valid = false;
     }
     if (!rangeEnd) {
-      alert('Palun vali kalendrist perioodi algus- ja lõppkuupäev.');
+      if (!silent) alert('Palun vali kalendrist perioodi algus- ja lõppkuupäev.');
       valid = false;
     }
 
     if (!valid) {
-      document.getElementById('result').classList.remove('visible');
+      resultEl.classList.remove('visible');
       return;
     }
 
-    const daysLeft  = Math.max(0, Math.round((rangeEnd - today) / 86400000) + 1);
     const totalDays = Math.round((rangeEnd - rangeStart) / 86400000) + 1;
+    let days, remaining;
 
-    if (daysLeft === 0) {
-      alert('Periood on lõppenud — päevi ei ole järel.');
-      return;
+    if (withToday) {
+      days = daysLeftFromToday();
+      if (days === 0) {
+        if (!silent) alert('Periood on lõppenud — päevi ei ole järel.');
+        resultEl.classList.remove('visible');
+        return;
+      }
+      remaining = budget - spent;
+    } else {
+      days = totalDays;
+      remaining = budget;
     }
 
-    const remaining = budget - spent;
-    const daily     = remaining / daysLeft;
+    const daily = remaining / days;
 
-    const resultEl = document.getElementById('result');
     resultEl.classList.add('visible');
 
     if (daily < 0) {
@@ -555,10 +623,17 @@
       document.getElementById('result-label').textContent = 'Päeva eelarve';
     }
 
+    document.getElementById('bd-remaining-label').textContent = withToday ? 'Järelejäänud eelarve' : 'Kogu eelarve';
+    document.getElementById('bd-days-label').textContent      = withToday ? 'Päevi järel (tänasest)' : 'Päevi perioodis';
+
     document.getElementById('result-value').innerHTML = fmt(daily) + '<span>€/päev</span>';
     document.getElementById('bd-remaining').textContent  = fmt(remaining) + ' €';
-    document.getElementById('bd-days').textContent       = daysLeft + ' päeva';
+    document.getElementById('bd-days').textContent       = days + ' päeva';
     document.getElementById('bd-total-days').textContent = totalDays + ' päeva';
+  }
+
+  function autoCalculate() {
+    calculate(true);
   }
 
   function fmt(n) {
@@ -567,6 +642,13 @@
 
   document.querySelectorAll('input[type="number"]').forEach(el => {
     el.addEventListener('keydown', e => { if (e.key === 'Enter') calculate(); });
+    el.addEventListener('input', autoCalculate);
+  });
+
+  document.getElementById('use-today').addEventListener('change', e => {
+    document.getElementById('spent-field').classList.toggle('hidden', !e.target.checked);
+    updateDateDisplay();
+    autoCalculate();
   });
 
   // ── Init ──
