@@ -347,6 +347,24 @@
     .result.warning { background: #fff5f5; border-color: #feb2b2; }
     .result.warning .result-label { color: #e53e3e; }
     .result.warning .result-value { color: #e53e3e; }
+
+    /* ── Pacing ── */
+    .pacing {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1.5px solid;
+    }
+    .pacing-top { display: flex; justify-content: space-between; align-items: baseline; }
+    .pacing-label { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+    .pacing-value { font-size: 1.5rem; font-weight: 700; }
+    .pacing-text { font-size: 0.8rem; margin-top: 2px; }
+    .pacing-bar { position: relative; height: 8px; margin-top: 10px; border-radius: 4px; background: rgba(0,0,0,0.08); overflow: hidden; }
+    .pacing-fill { height: 100%; border-radius: 4px; }
+    .pacing.good { background: #f0fff4; border-color: #9ae6b4; color: #276749; }
+    .pacing.good .pacing-fill { background: #38a169; }
+    .pacing.bad  { background: #fff5f5; border-color: #feb2b2; color: #c53030; }
+    .pacing.bad  .pacing-fill { background: #e53e3e; }
   </style>
 </head>
 <body>
@@ -438,6 +456,14 @@
         <span>Kogu perioodi pikkus</span>
         <span class="val" id="bd-total-days">–</span>
       </div>
+    </div>
+    <div class="pacing hidden" id="pacing">
+      <div class="pacing-top">
+        <span class="pacing-label">Eelarve tempo</span>
+        <span class="pacing-value" id="pacing-value">–</span>
+      </div>
+      <div class="pacing-text" id="pacing-text"></div>
+      <div class="pacing-bar"><div class="pacing-fill" id="pacing-fill"></div></div>
     </div>
   </div>
 </div>
@@ -630,6 +656,32 @@
     document.getElementById('bd-remaining').textContent  = fmt(remaining) + ' €';
     document.getElementById('bd-days').textContent       = days + ' päeva';
     document.getElementById('bd-total-days').textContent = totalDays + ' päeva';
+
+    renderPacing(withToday, budget, spent, totalDays);
+  }
+
+  // Pacing: actual spend vs. the evenly-spread spend expected by the end of today.
+  // 100% = exactly on plan, below = under plan (green), above = over plan (red).
+  function renderPacing(withToday, budget, spent, totalDays) {
+    const el = document.getElementById('pacing');
+    const daysElapsed = Math.min(totalDays, Math.round((today - rangeStart) / 86400000) + 1);
+    if (!withToday || budget <= 0 || daysElapsed < 1) {
+      el.classList.add('hidden');
+      return;
+    }
+    const expected = budget * daysElapsed / totalDays;
+    const pct = spent / expected * 100;
+    const over = pct > 100;
+
+    el.classList.remove('hidden', 'good', 'bad');
+    el.classList.add(over ? 'bad' : 'good');
+    document.getElementById('pacing-value').textContent =
+      pct.toLocaleString('et-EE', { maximumFractionDigits: 0 }) + '%';
+    const diff = Math.abs(spent - expected);
+    document.getElementById('pacing-text').textContent =
+      `Plaani järgi tänaseks ${fmt(expected)} € (${daysElapsed}/${totalDays} päeva) · ` +
+      (over ? `${fmt(diff)} € üle plaani` : `${fmt(diff)} € alla plaani`);
+    document.getElementById('pacing-fill').style.width = Math.min(100, pct) + '%';
   }
 
   function autoCalculate() {
